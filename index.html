@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Checklist de Sistemas · El Chinito</title>
+  <meta name="description" content="Checklist diario de sistemas de Sanguchería El Chinito">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0E0E0E">
+  <link rel="icon" type="image/png" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Checklist TI">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <script src="config.js"></script>
+  <style>
+    :root { --y: #F6C300; --k: #0E0E0E; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--k); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; overflow: hidden; }
+    #app { position: fixed; left: 0; right: 0; bottom: 0; top: env(safe-area-inset-top, 0); width: 100%; height: calc(100% - env(safe-area-inset-top, 0px)); border: 0; background: var(--k); }
+    .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: var(--k); color: #fff; text-align: center; padding: 30px; z-index: 10; transition: opacity .5s; }
+    .screen.hide { opacity: 0; pointer-events: none; }
+    .screen img { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 14px 40px rgba(0,0,0,.5); animation: pop 1.2s ease-in-out infinite alternate; }
+    @keyframes pop { from { transform: scale(.95); } to { transform: scale(1.04); } }
+    .bar { width: 150px; height: 4px; background: #2a2a2a; border-radius: 4px; overflow: hidden; }
+    .bar i { display: block; width: 40%; height: 100%; background: var(--y); border-radius: 4px; animation: slide 1s ease-in-out infinite; }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+    .screen h1 { font-size: 20px; color: var(--y); }
+    .screen p { color: #bbb; font-size: 14px; line-height: 1.5; max-width: 340px; }
+    .screen code { background: #222; color: var(--y); padding: 2px 6px; border-radius: 6px; font-size: 12px; word-break: break-all; }
+    .btn { background: var(--y); color: var(--k); border: 0; border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 15px; cursor: pointer; }
+    #install { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20; background: #fff; border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.35); padding: 14px; display: none; align-items: center; gap: 12px; animation: up .4s ease-out; }
+    @keyframes up { from { transform: translateY(120%); } }
+    #install img { width: 46px; height: 46px; border-radius: 12px; }
+    #install .tx { flex: 1; font-size: 13px; color: #333; line-height: 1.35; }
+    #install .tx b { display: block; font-size: 14.5px; color: #111; }
+    #install .x { background: none; border: 0; font-size: 22px; color: #999; cursor: pointer; padding: 4px 8px; }
+  </style>
+</head>
+<body>
+  <iframe id="app" title="Checklist de Sistemas" allow="camera; microphone; clipboard-read; clipboard-write; fullscreen; geolocation"></iframe>
+
+  <div class="screen" id="splash">
+    <img src="icons/icon-192.png" alt="">
+    <div class="bar"><i></i></div>
+    <p>Cargando Checklist de Sistemas…</p>
+  </div>
+
+  <div class="screen hide" id="offline" hidden>
+    <img src="icons/icon-192.png" alt="" style="animation:none;filter:grayscale(1);opacity:.6">
+    <h1>Sin conexión a internet</h1>
+    <p>El checklist necesita internet para registrar y ver la información en tiempo real.</p>
+    <button class="btn" onclick="location.reload()">Reintentar</button>
+  </div>
+
+  <div class="screen hide" id="setup" hidden>
+    <img src="icons/icon-192.png" alt="" style="animation:none">
+    <h1>Falta un paso de configuración</h1>
+    <p>Abre el archivo <code>config.js</code> y pega la URL de tu aplicación web de Apps Script (la que termina en <code>/exec</code>). Luego vuelve a subir los archivos.</p>
+  </div>
+
+  <div id="install">
+    <img src="icons/icon-192.png" alt="">
+    <div class="tx" id="installTx"><b>Instala la app</b>Agrega Checklist TI a tu pantalla de inicio.</div>
+    <button class="btn" id="installBtn">Instalar</button>
+    <button class="x" id="installX" aria-label="Cerrar">×</button>
+  </div>
+
+  <script>
+    (function () {
+      var cfg = window.APP_CONFIG || {};
+      var url = String(cfg.APP_URL || '').trim();
+      var $ = function (id) { return document.getElementById(id); };
+      var show = function (id) { var el = $(id); el.hidden = false; requestAnimationFrame(function () { el.classList.remove('hide'); }); };
+      var hide = function (id) { var el = $(id); el.classList.add('hide'); setTimeout(function () { el.hidden = true; }, 500); };
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+      }
+
+      var valid = /^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url);
+      if (!valid) { hide('splash'); show('setup'); return; }
+
+      var frame = $('app'), loaded = false;
+      function load() {
+        if (!navigator.onLine) { hide('splash'); show('offline'); return; }
+        frame.src = url;
+      }
+      frame.addEventListener('load', function () {
+        if (!frame.src) return;
+        loaded = true;
+        setTimeout(function () { hide('splash'); }, 600);
+      });
+      setTimeout(function () { if (!loaded) hide('splash'); }, 20000);
+      window.addEventListener('offline', function () { if (!loaded) show('offline'); });
+      window.addEventListener('online', function () { if (!$('offline').hidden) location.reload(); });
+      load();
+
+      var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      var dismissed = false;
+      try { dismissed = localStorage.getItem('ck_install_x') === '1'; } catch (e) {}
+      var bar = $('install'), deferred = null;
+      $('installX').onclick = function () { bar.style.display = 'none'; try { localStorage.setItem('ck_install_x', '1'); } catch (e) {} };
+      if (standalone || dismissed) return;
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault(); deferred = e; bar.style.display = 'flex';
+      });
+      $('installBtn').onclick = function () {
+        if (!deferred) return;
+        deferred.prompt();
+        deferred.userChoice.then(function () { deferred = null; bar.style.display = 'none'; });
+      };
+      window.addEventListener('appinstalled', function () { bar.style.display = 'none'; });
+
+      var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (ios) {
+        $('installTx').innerHTML = '<b>Instala la app</b>Toca Compartir <span style="font-size:16px">⬆︎</span> y luego “Agregar a inicio”.';
+        $('installBtn').style.display = 'none';
+        setTimeout(function () { bar.style.display = 'flex'; }, 3000);
+      }
+    })();
+  </script>
+</body>
+</html>
