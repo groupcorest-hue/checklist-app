@@ -31,13 +31,13 @@
     .screen p { color: #bbb; font-size: 14px; line-height: 1.5; max-width: 340px; }
     .screen code { background: #222; color: var(--y); padding: 2px 6px; border-radius: 6px; font-size: 12px; word-break: break-all; }
     .btn { background: var(--y); color: var(--k); border: 0; border-radius: 12px; padding: 12px 22px; font-weight: 700; font-size: 15px; cursor: pointer; }
-    #install { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20; background: #fff; border-radius: 16px;
+    #install, .bar-bottom { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20; background: #fff; border-radius: 16px;
       box-shadow: 0 12px 40px rgba(0,0,0,.35); padding: 14px; display: none; align-items: center; gap: 12px; animation: up .4s ease-out; }
     @keyframes up { from { transform: translateY(120%); } }
-    #install img { width: 46px; height: 46px; border-radius: 12px; }
-    #install .tx { flex: 1; font-size: 13px; color: #333; line-height: 1.35; }
-    #install .tx b { display: block; font-size: 14.5px; color: #111; }
-    #install .x { background: none; border: 0; font-size: 22px; color: #999; cursor: pointer; padding: 4px 8px; }
+    #install img, .bar-bottom img { width: 46px; height: 46px; border-radius: 12px; }
+    #install .tx, .bar-bottom .tx { flex: 1; font-size: 13px; color: #333; line-height: 1.35; }
+    #install .tx b, .bar-bottom .tx b { display: block; font-size: 14.5px; color: #111; }
+    #install .x, .bar-bottom .x { background: none; border: 0; font-size: 22px; color: #999; cursor: pointer; padding: 4px 8px; }
   </style>
 </head>
 <body>
@@ -60,6 +60,13 @@
     <img src="icons/icon-192.png" alt="" style="animation:none">
     <h1>Falta un paso de configuración</h1>
     <p>Abre el archivo <code>config.js</code> y pega la URL de tu aplicación web de Apps Script (la que termina en <code>/exec</code>). Luego vuelve a subir los archivos.</p>
+  </div>
+
+  <div id="notif" class="bar-bottom">
+    <img src="icons/icon-192.png" alt="">
+    <div class="tx"><b>Activa las alertas</b>Recibe una notificación cuando llegue un nuevo reporte.</div>
+    <button class="btn" id="notifBtn">Activar</button>
+    <button class="x" id="notifX" aria-label="Cerrar">×</button>
   </div>
 
   <div id="install">
@@ -98,6 +105,39 @@
       window.addEventListener('offline', function () { if (!loaded) show('offline'); });
       window.addEventListener('online', function () { if (!$('offline').hidden) location.reload(); });
       load();
+
+      // ---- Notificaciones nativas: el sistema avisa a esta app y aquí se muestra la notificación del teléfono
+      var appOrigin = ''; try { appOrigin = new URL(url).origin; } catch (e) {}
+      function trusted(origin) {
+        try { var h = new URL(origin).hostname; return origin === appOrigin || h === 'script.google.com' || /\.googleusercontent\.com$/.test(h); } catch (e) { return false; }
+      }
+      window.addEventListener('message', function (ev) {
+        var d = ev.data;
+        if (!d || d.type !== 'ck-alert' || !trusted(ev.origin)) return;
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        var opts = { body: String(d.body || ''), icon: 'icons/icon-192.png', badge: 'icons/favicon-32.png', tag: String(d.tag || 'ck'),
+          renotify: true, requireInteraction: !!d.urgent, vibrate: d.urgent ? [300, 120, 300, 120, 300] : [200, 100, 200], data: { url: location.href } };
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready.then(function (reg) { reg.showNotification(String(d.title || 'Alerta'), opts); })
+            .catch(function () { try { new Notification(String(d.title || 'Alerta'), opts); } catch (e) {} });
+        } else { try { new Notification(String(d.title || 'Alerta'), opts); } catch (e) {} }
+      });
+      var nb = $('notif'), nDismissed = false;
+      try { nDismissed = localStorage.getItem('ck_notif_x') === '1'; } catch (e) {}
+      if ('Notification' in window && Notification.permission === 'default' && !nDismissed) {
+        setTimeout(function () { if ($('install').style.display !== 'flex') nb.style.display = 'flex'; }, 4000);
+      }
+      $('notifBtn').onclick = function () {
+        Notification.requestPermission().then(function (perm) {
+          nb.style.display = 'none';
+          if (perm === 'granted' && navigator.serviceWorker) {
+            navigator.serviceWorker.ready.then(function (reg) {
+              reg.showNotification('Alertas activadas', { body: 'Te avisaremos cuando llegue un nuevo reporte.', icon: 'icons/icon-192.png', tag: 'ck-ok' });
+            });
+          }
+        });
+      };
+      $('notifX').onclick = function () { nb.style.display = 'none'; try { localStorage.setItem('ck_notif_x', '1'); } catch (e) {} };
 
       var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       var dismissed = false;
