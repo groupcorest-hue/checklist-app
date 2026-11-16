@@ -1,6 +1,6 @@
 /* Service worker: guarda la "carcasa" de la app para que abra rápido y muestre un aviso si no hay internet.
    El sistema (Apps Script) siempre se carga en vivo desde Google: no se guardan datos en el celular. */
-const CACHE = 'checklist-elchinito-v1';
+const CACHE = 'checklist-elchinito-v2';
 const SHELL = ['./', 'index.html', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-192.png', 'icons/maskable-512.png',
   'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
@@ -23,4 +23,13 @@ self.addEventListener('fetch', e => {
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match('index.html')))
   );
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = (e.notification.data && e.notification.data.url) || './';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) { if ('focus' in c) return c.focus(); }
+    return self.clients.openWindow(target);
+  }));
 });
